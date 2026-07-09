@@ -84,7 +84,11 @@ class GATEdgeClassifier(nn.Module):
         if classify_edge_attr is None:
             classify_edge_attr = message_edge_attr
 
-        h = self.gat1(x, message_edge_index, message_edge_attr)
+        h = self.gat1(
+            x,
+            message_edge_index,
+            message_edge_attr,
+        )
         h = F.elu(h)
         h = F.dropout(h, p=self.dropout, training=self.training)
         h = self.gat2(h, message_edge_index, message_edge_attr)
