@@ -32,8 +32,8 @@ RAW_COLUMNS = [
 
 IP_COLUMNS = ["id.orig_h", "id.resp_h"]
 CATEGORICAL_COLUMNS = ["proto", "service", "conn_state", "history"]
-NUMERIC_COLUMNS = [
-    "ts",
+TIMESTAMP_COLUMN = "ts"
+MODEL_NUMERIC_COLUMNS = [
     "id.orig_p",
     "id.resp_p",
     "duration",
@@ -45,6 +45,8 @@ NUMERIC_COLUMNS = [
     "resp_pkts",
     "resp_ip_bytes",
 ]
+NUMERIC_COLUMNS = MODEL_NUMERIC_COLUMNS
+CLEAN_NUMERIC_COLUMNS = [TIMESTAMP_COLUMN, *MODEL_NUMERIC_COLUMNS]
 
 TARGET_COLUMN = "binary_label"
 RANDOM_STATE = 42
@@ -58,7 +60,7 @@ def clean_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     df = chunk.copy()
     df = df.replace("-", np.nan)
 
-    for col in NUMERIC_COLUMNS:
+    for col in CLEAN_NUMERIC_COLUMNS:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
     for col in CATEGORICAL_COLUMNS:
@@ -193,9 +195,12 @@ def write_metadata(output_dir: Path, summary: dict, paths: dict, args: argparse.
         "source_file": str(args.data_path),
         "target_column": TARGET_COLUMN,
         "raw_label_column": "label",
+        "timestamp_column": TIMESTAMP_COLUMN,
         "ip_columns": IP_COLUMNS,
         "categorical_columns": CATEGORICAL_COLUMNS,
         "numeric_columns": NUMERIC_COLUMNS,
+        "cleaned_numeric_columns": CLEAN_NUMERIC_COLUMNS,
+        "excluded_from_model_features": [TIMESTAMP_COLUMN],
         "random_state": int(args.random_state),
         "chunk_size": int(args.chunk_size),
         "summary": summary,

@@ -61,7 +61,13 @@ def append_new_flow_to_graph(
     for ip_value in [src_ip, dst_ip]:
         if ip_value not in node_mapping:
             node_mapping[ip_value] = len(node_mapping)
-            x = np.vstack([x, np.asarray(ip_to_features(ip_value), dtype=np.float32)])
+            ip_features = np.asarray(ip_to_features(ip_value), dtype=np.float32)
+            if x.shape[1] > len(ip_features):
+                padding = np.zeros(x.shape[1] - len(ip_features), dtype=np.float32)
+                node_features = np.concatenate([ip_features, padding])
+            else:
+                node_features = ip_features[: x.shape[1]]
+            x = np.vstack([x, node_features])
 
     new_edge_index = np.asarray(
         [[node_mapping[src_ip]], [node_mapping[dst_ip]]],

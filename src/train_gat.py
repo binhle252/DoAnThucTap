@@ -279,9 +279,11 @@ def save_confusion_matrices(results_dir: Path, metrics: dict) -> None:
 def train(args: argparse.Namespace) -> dict:
     set_seed(args.random_state)
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
+    selection_metric = getattr(args, "selection_metric", "val_f1")
 
     data = load_graph_data(args.arrays_path, device)
-    message_edge_index, message_edge_attr = get_message_edges(data, args.message_passing_edges)
+    message_passing_edges = getattr(args, "message_passing_edges", "all")
+    message_edge_index, message_edge_attr = get_message_edges(data, message_passing_edges)
     model = GATEdgeClassifier(
         node_in_channels=data.x.shape[1],
         edge_in_channels=data.edge_attr.shape[1],
@@ -298,7 +300,7 @@ def train(args: argparse.Namespace) -> dict:
     criterion = nn.CrossEntropyLoss()
 
     history = []
-    best_val_f1 = -1.0
+    best_selection_score = -1.0
     best_epoch = 0
     best_state_dict = copy.deepcopy(model.state_dict())
     epochs_without_improvement = 0
@@ -324,15 +326,35 @@ def train(args: argparse.Namespace) -> dict:
             message_edge_attr,
             threshold=0.5,
         )
+        with torch.no_grad():
+            model.eval()
+            selection_logits = model(
+                data.x,
+                message_edge_index,
+                message_edge_attr,
+                data.edge_index,
+                data.edge_attr,
+            )
+            selection_probs = positive_probs_from_logits(selection_logits)
+            val_threshold_info = tune_threshold(selection_probs, data.y, data.val_mask)
+
         row = {
             "epoch": epoch,
             "loss": float(loss.detach().cpu()),
+            "val_tuned_threshold": float(val_threshold_info["threshold"]),
+            "val_tuned_precision": float(val_threshold_info["precision"]),
+            "val_tuned_recall": float(val_threshold_info["recall"]),
+            "val_tuned_f1": float(val_threshold_info["f1"]),
             **flatten_metrics(metrics),
         }
         history.append(row)
 
-        if row["val_f1"] > best_val_f1 + args.min_delta:
-            best_val_f1 = row["val_f1"]
+        if selection_metric not in row:
+            raise ValueError(f"Unknown selection metric: {selection_metric}")
+        selection_score = row[selection_metric]
+
+        if selection_score > best_selection_score + args.min_delta:
+            best_selection_score = selection_score
             best_epoch = epoch
             best_state_dict = copy.deepcopy(model.state_dict())
             epochs_without_improvement = 0
@@ -344,6 +366,7 @@ def train(args: argparse.Namespace) -> dict:
             f"loss={row['loss']:.4f} | "
             f"val_acc={row['val_accuracy']:.4f} | "
             f"val_f1={row['val_f1']:.4f} | "
+            f"val_tuned_f1={row['val_tuned_f1']:.4f} | "
             f"best_epoch={best_epoch:03d}"
         )
 
@@ -381,7 +404,8 @@ def train(args: argparse.Namespace) -> dict:
             "hidden_channels": int(args.hidden_channels),
             "heads": int(args.heads),
             "dropout": float(args.dropout),
-            "message_passing_edges": args.message_passing_edges,
+            "message_passing_edges": message_passing_edges,
+            "selection_metric": selection_metric,
         },
         "threshold": float(threshold_selection["threshold"]),
         "best_epoch": int(best_epoch),
@@ -396,10 +420,11 @@ def train(args: argparse.Namespace) -> dict:
         "completed_epochs": int(len(history)),
         "best_epoch": int(best_epoch),
         "selection_policy": {
-            "best_model_selected_by": "validation_f1_at_threshold_0.5",
+            "best_model_selected_by": selection_metric,
             "classification_threshold_selected_by": "validation_f1_precision_recall_curve",
             "test_set_usage": "reported_once_after_model_and_threshold_selection",
-            "message_passing_edges": args.message_passing_edges,
+            "message_passing_edges": message_passing_edges,
+            "selection_score": float(best_selection_score),
         },
         "threshold_selection": threshold_selection,
         "history": history,
@@ -434,6 +459,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--early-stopping", action="store_true")
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--min-delta", type=float, default=0.0005)
+    parser.add_argument(
+        "--selection-metric",
+        choices=["val_f1", "val_tuned_f1", "val_pr_auc", "val_roc_auc"],
+        default="val_f1",
+        help="Validation metric used for best-epoch selection.",
+    )
     parser.add_argument(
         "--message-passing-edges",
         choices=["all", "train"],

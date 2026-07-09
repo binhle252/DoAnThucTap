@@ -12,34 +12,35 @@ Muc tieu cua mo hinh khong phai la dat 100% tren test set bang moi gia, vi ket q
 - Test set chi dung mot lan de bao cao ket qua cuoi cung.
 - Khong dung nhan `label` lam dac trung dau vao.
 - Loai bo `uid` vi day la ma dinh danh duy nhat cua tung flow.
+- Khong dung `ts` lam dac trung dau vao; `ts` chi dung cho chia du lieu theo thoi gian va metadata.
 
 ## Ket Qua Hien Tai
 
 Mo hinh GAT dat ket qua tren test set:
 
 ```text
-Accuracy  = 0.9889
-Precision = 0.9793
-Recall    = 0.9989
-F1-score  = 0.9890
-ROC-AUC   = 0.9990
-PR-AUC    = 0.9989
+Accuracy  = 0.9876
+Precision = 0.9792
+Recall    = 0.9964
+F1-score  = 0.9877
+ROC-AUC   = 0.9899
+PR-AUC    = 0.9893
 ```
 
 Confusion matrix tren test set:
 
 ```text
-TN = 7342
-FP = 158
-FN = 8
-TP = 7492
+TN = 7341
+FP = 159
+FN = 27
+TP = 7473
 ```
 
 ## Giai Thich Khi Bao Ve
 
-Ket qua cao vi bai toan hien tai la binary classification: `Benign` so voi `Malicious`. Cac hanh vi tan cong trong IoT-23 co nhieu dau hieu manh trong cac feature nhu protocol, connection state, packet count, byte count va dia chi IP. Tuy nhien, ket qua khong phai 100%, van co false positive va false negative, nen khong co dau hieu hoan hao bat thuong.
+Ket qua cao vi bai toan hien tai la binary classification: `Benign` so voi `Malicious`. Cac hanh vi tan cong trong IoT-23 co nhieu dau hieu manh trong cac feature nhu protocol, connection state, packet count, byte count va dia chi IP. Timestamp `ts` da bi loai khoi feature model de tranh viec mo hinh hoc shortcut theo thoi gian. Tuy nhien, ket qua khong phai 100%, van co false positive va false negative, nen khong co dau hieu hoan hao bat thuong.
 
-Train-test gap cua F1-score rat nho, khoang -0.0005. Dieu nay cho thay mo hinh khong co hien tuong train score qua cao nhung test score thap, la dau hieu thuong gap khi hoc thuoc.
+Train-test gap cua F1-score rat nho, khoang -0.0004. Dieu nay cho thay mo hinh khong co hien tuong train score qua cao nhung test score thap, la dau hieu thuong gap khi hoc thuoc. Cac lua chon nhu best epoch va threshold deu dua tren validation, khong dua tren test.
 
 ## Huong Mo Rong Nghiem Ngat Hon
 

@@ -5,10 +5,49 @@
     "edge": "traffic flow from id.orig_h to id.resp_h",
     "label": "binary_label"
   },
-  "num_nodes": 92338,
+  "model_feature_policy": {
+    "numeric_columns": [
+      "id.orig_p",
+      "id.resp_p",
+      "duration",
+      "orig_bytes",
+      "resp_bytes",
+      "missed_bytes",
+      "orig_pkts",
+      "orig_ip_bytes",
+      "resp_pkts",
+      "resp_ip_bytes"
+    ],
+    "categorical_columns": [
+      "proto",
+      "service",
+      "conn_state",
+      "history"
+    ],
+    "excluded_columns": [
+      "ts"
+    ],
+    "note": "Timestamp is kept for splitting/metadata but is not used as a model feature."
+  },
+  "node_feature_policy": {
+    "mode": "ip",
+    "ip_features": [
+      "ipv4_octet_1",
+      "ipv4_octet_2",
+      "ipv4_octet_3",
+      "ipv4_octet_4",
+      "is_private",
+      "is_global",
+      "is_multicast",
+      "is_loopback"
+    ],
+    "train_only_stat_features": [],
+    "note": "Train-only node statistics are computed only from train edges, use no labels, then log1p-scaled and standardized across nodes."
+  },
+  "num_nodes": 92413,
   "num_edges": 100000,
   "node_feature_dim": 8,
-  "edge_feature_dim": 51,
+  "edge_feature_dim": 54,
   "node_feature_names": [
     "ipv4_octet_1",
     "ipv4_octet_2",
@@ -20,7 +59,6 @@
     "is_loopback"
   ],
   "edge_feature_names": [
-    "numeric__ts",
     "numeric__id.orig_p",
     "numeric__id.resp_p",
     "numeric__duration",
@@ -45,29 +83,33 @@
     "categorical__conn_state_RSTO",
     "categorical__conn_state_RSTR",
     "categorical__conn_state_S0",
+    "categorical__conn_state_S1",
     "categorical__conn_state_S3",
     "categorical__conn_state_SF",
     "categorical__conn_state_SH",
     "categorical__history_C",
     "categorical__history_D",
     "categorical__history_DRr",
+    "categorical__history_D^",
     "categorical__history_Dd",
+    "categorical__history_DdA",
     "categorical__history_F",
     "categorical__history_S",
-    "categorical__history_ShADadFf",
-    "categorical__history_ShADadf",
+    "categorical__history_ShADCaGdfF",
+    "categorical__history_ShADaFr",
+    "categorical__history_ShADacfgF",
+    "categorical__history_ShADad",
     "categorical__history_ShADadfF",
     "categorical__history_ShADadfFr",
     "categorical__history_ShADadfr",
+    "categorical__history_ShADadr",
     "categorical__history_ShADadtFf",
-    "categorical__history_ShADadtctfFR",
-    "categorical__history_ShADadtfF",
-    "categorical__history_ShADadttcfF",
+    "categorical__history_ShADadttfF",
     "categorical__history_ShADafF",
+    "categorical__history_ShAFaf",
     "categorical__history_ShAFf",
     "categorical__history_ShAdDaf",
     "categorical__history_ShAdDaft",
-    "categorical__history_ShAdfFa",
     "categorical__history_ShR",
     "categorical__history_Sr",
     "categorical__history_missing"

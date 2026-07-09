@@ -148,6 +148,10 @@ def load_gat_row(results_dir: Path) -> dict | None:
 
     gat = json.loads(metrics_path.read_text(encoding="utf-8"))
     test = gat["final_metrics"]["test"]
+    selected_by = gat.get("selection_policy", {}).get(
+        "best_model_selected_by",
+        "validation_f1",
+    )
     return {
         "model": "GAT",
         "threshold": test["threshold"],
@@ -157,7 +161,7 @@ def load_gat_row(results_dir: Path) -> dict | None:
         "f1": test["f1"],
         "roc_auc": test["roc_auc"],
         "pr_auc": test["pr_auc"],
-        "selected_by": "validation_f1",
+        "selected_by": selected_by,
     }
 
 

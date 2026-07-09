@@ -23,16 +23,17 @@ Artifact:
 
 Nhan xet hien tai:
 
-- Random Forest dat gan nhu hoan hao tren random split.
-- Dieu nay cho thay random split co the qua de.
-- Vi vay viec tiep theo rat quan trong la strict split.
+- Random Forest van dat gan nhu hoan hao tren random split sau khi da loai `ts`.
+- Dieu nay cho thay random split co the qua de va flow-level features rat manh.
+- Vi vay strict split va ablation study la hai viec tiep theo quan trong.
 
 ## 2. GAT Ablation Study
 
-Trang thai: chua lam.
+Trang thai: da chuan bi mot phan trong code, chua chay thanh bang tong hop.
 
 Can thu:
 
+- `node-feature-mode ip` va `node-feature-mode ip_stats`.
 - GAT co edge features va khong co edge features.
 - GAT 1 layer va 2 layer.
 - Heads = 1, 2, 4.
@@ -45,7 +46,7 @@ Ket qua mong muon:
 
 ## 3. Strict Split
 
-Trang thai: da lam ban dau.
+Trang thai: da lam lai sau khi loai `ts` khoi feature model.
 
 Can lam mot trong hai cach:
 
@@ -60,7 +61,7 @@ Da co:
 - `results/strict_time_balanced/`
 - `report/strict_split_analysis.md`
 
-Ket qua strict split cho thay GAT giam diem khi chi message passing tren train graph, trong khi Logistic Regression va MLP van rat manh. Day la bang chung huu ich de thao luan ve gioi han cua random split va vai tro cua edge features.
+Ket qua strict split cho thay GAT kho hon nhieu khi chi message passing tren train graph. Sau khi chon epoch bang `val_tuned_f1`, GAT dat F1 khoang 0.7187, cao hon Dummy va Random Forest nhung van thap hon Logistic Regression va MLP. Day la bang chung huu ich de thao luan ve gioi han cua random split, temporal shift va vai tro cua flow-level edge features.
 
 ## 4. Visualization
 
@@ -92,8 +93,8 @@ Can mo rong:
 
 ## Thu Tu Lam Tiep
 
-1. Strict split.
-2. GAT ablation study.
-3. Hoan thien visualization.
-4. Demo giao dien.
-5. Viet bao cao va slide.
+1. Chay GAT ablation study va lap bang tong hop.
+2. Hoan thien visualization.
+3. Demo giao dien.
+4. Viet bao cao va slide.
+5. Neu con thoi gian, them unseen-IP split.
