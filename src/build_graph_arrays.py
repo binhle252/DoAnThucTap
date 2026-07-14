@@ -219,14 +219,32 @@ def build_node_features(
     train_df: pd.DataFrame,
     node_feature_mode: str,
 ) -> np.ndarray:
+
     ip_features = build_ip_node_features(node_mapping)
+
+    train_stats = build_train_node_stat_features(
+        train_df,
+        node_mapping,
+    )
+
     if node_feature_mode == "ip":
         return ip_features
-    if node_feature_mode != "ip_stats":
-        raise ValueError(f"Unknown node feature mode: {node_feature_mode}")
 
-    train_stats = build_train_node_stat_features(train_df, node_mapping)
-    return np.hstack([ip_features, train_stats]).astype(np.float32)
+    elif node_feature_mode == "stats":
+        return train_stats
+
+    elif node_feature_mode == "ip_stats":
+        return np.hstack(
+            [
+                ip_features,
+                train_stats,
+            ]
+        ).astype(np.float32)
+
+    else:
+        raise ValueError(
+            f"Unknown node feature mode: {node_feature_mode}"
+        )
 
 
 def build_edge_index(df: pd.DataFrame, node_mapping: dict[str, int]) -> np.ndarray:
@@ -272,6 +290,21 @@ def build_graph_arrays(
         edge_attr=edge_attr,
         y=y,
         **masks,
+    )
+
+    mapping_df = (
+        pd.DataFrame(
+            {
+                "ip": list(node_mapping.keys()),
+                "node_id": list(node_mapping.values()),
+            }
+        )
+        .sort_values("node_id")
+    )
+
+    mapping_df.to_csv(
+        output_dir / "node_mapping.csv",
+        index=False,
     )
 
     node_mapping_path = output_dir / "node_mapping.csv"
@@ -348,7 +381,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--node-feature-mode",
-        choices=["ip", "ip_stats"],
+        choices=[
+            "ip",
+            "stats",
+            "ip_stats",
+        ],
         default="ip",
         help="Use only IP-derived node features, or add train-only node statistics for ablation.",
     )

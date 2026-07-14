@@ -23,8 +23,13 @@ def project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def clean_flow(flow: dict) -> pd.DataFrame:
-    df = pd.DataFrame([flow])
+def clean_flow(data: pd.DataFrame | dict) -> pd.DataFrame:
+
+    if isinstance(data, pd.DataFrame):
+        df = data.copy()
+    else:
+        df = pd.DataFrame([data])
+
     df = df.replace("-", np.nan)
 
     for col in NUMERIC_COLUMNS:
@@ -83,55 +88,75 @@ def append_new_flow_to_graph(
         torch.tensor(edge_attr, dtype=torch.float32),
     )
 
+def load_model(model_path: Path, cpu: bool = False):
 
-def predict_flow(args: argparse.Namespace) -> dict:
-    device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() and not cpu else "cpu"
+    )
 
-    checkpoint = torch.load(args.model_path, map_location=device)
+    checkpoint = torch.load(
+        model_path,
+        map_location=device,
+    )
+
     config = checkpoint["config"]
-    threshold = float(checkpoint.get("threshold", 0.5))
+
+    threshold = float(
+        checkpoint.get("threshold", 0.5)
+    )
 
     model = GATEdgeClassifier(
         node_in_channels=config["node_in_channels"],
         edge_in_channels=config["edge_in_channels"],
         hidden_channels=config["hidden_channels"],
         heads=config["heads"],
+        layers=config.get("layers", 2),
         dropout=config["dropout"],
     ).to(device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    model.load_state_dict(
+        checkpoint["model_state_dict"]
+    )
+
     model.eval()
 
-    flow = {
-        "ts": args.ts,
-        "id.orig_h": args.src_ip,
-        "id.orig_p": args.src_port,
-        "id.resp_h": args.dst_ip,
-        "id.resp_p": args.dst_port,
-        "proto": args.proto,
-        "service": args.service,
-        "duration": args.duration,
-        "orig_bytes": args.orig_bytes,
-        "resp_bytes": args.resp_bytes,
-        "conn_state": args.conn_state,
-        "missed_bytes": args.missed_bytes,
-        "history": args.history,
-        "orig_pkts": args.orig_pkts,
-        "orig_ip_bytes": args.orig_ip_bytes,
-        "resp_pkts": args.resp_pkts,
-        "resp_ip_bytes": args.resp_ip_bytes,
-    }
+    return (
+        model,
+        device,
+        threshold,
+        config,
+    )
+
+def predict_flow(
+        flow: dict,
+        model,
+        device,
+        threshold,
+        preprocessor,
+        node_mapping,
+        arrays_path: Path,
+    ) -> dict:    
+
+    print("=" * 50)
+    print(flow["id.orig_h"])
+    print(flow["id.resp_h"])
+    print(flow["orig_bytes"])
+    print(flow["resp_bytes"])
+
     flow_df = clean_flow(flow)
 
-    preprocessor = joblib.load(args.preprocessor_path)
     new_edge_attr = preprocessor.transform(flow_df)
-    node_mapping = load_node_mapping(args.node_mapping_path)
 
     x, edge_index, edge_attr = append_new_flow_to_graph(
-        arrays_path=args.arrays_path,
+        arrays_path=arrays_path,
         node_mapping=node_mapping,
         flow_df=flow_df,
         edge_attr=new_edge_attr,
     )
+
+    print(edge_index[:, -1])
+
+    print(edge_attr[-1][:10])
 
     x = x.to(device)
     edge_index = edge_index.to(device)
@@ -139,6 +164,7 @@ def predict_flow(args: argparse.Namespace) -> dict:
 
     with torch.no_grad():
         logits = model(x, edge_index, edge_attr)
+        print(logits[-1])
         probs = torch.softmax(logits[-1], dim=0).detach().cpu().numpy()
 
     malicious_probability = float(probs[1])
@@ -154,6 +180,89 @@ def predict_flow(args: argparse.Namespace) -> dict:
         "input_flow": flow,
     }
 
+
+def predict_dataframe(
+    df: pd.DataFrame,
+    model_path: Path,
+    arrays_path: Path,
+    node_mapping_path: Path,
+    preprocessor_path: Path,
+    cpu: bool = False,
+) -> pd.DataFrame:
+
+    model, device, threshold, _ = load_model(
+        model_path,
+        cpu,
+    )
+
+    preprocessor = joblib.load(preprocessor_path)
+
+    node_mapping = load_node_mapping(node_mapping_path)
+
+    results = []
+
+    for _, row in df.iterrows():
+
+        result = predict_flow(
+            flow=row.to_dict(),
+            model=model,
+            device=device,
+            threshold=threshold,
+            preprocessor=preprocessor,
+            node_mapping=node_mapping.copy(),
+            arrays_path=arrays_path,
+        )
+
+        results.append(result)
+
+    output = df.copy()
+
+    output["Prediction"] = [
+        r["predicted_label"]
+        for r in results
+    ]
+
+    output["Probability"] = [
+        r["malicious_probability"]
+        for r in results
+    ]
+
+    print("1. Load model")
+    model, device, threshold, _ = load_model(
+        model_path,
+        cpu,
+    )
+
+    print("2. Load preprocessor")
+    preprocessor = joblib.load(preprocessor_path)
+
+    print("3. Load node mapping")
+    node_mapping = load_node_mapping(node_mapping_path)
+
+    print("4. Start prediction")
+
+    results = []
+
+    for i, (_, row) in enumerate(df.iterrows()):
+
+        if i % 100 == 0:
+            print(f"Processing {i}/{len(df)}")
+
+        result = predict_flow(
+            flow=row.to_dict(),
+            model=model,
+            device=device,
+            threshold=threshold,
+            preprocessor=preprocessor,
+            node_mapping=node_mapping.copy(),
+            arrays_path=arrays_path,
+        )
+
+        results.append(result)
+
+    print("5. Finish")
+
+    return output
 
 def parse_args() -> argparse.Namespace:
     root = project_root()
@@ -186,6 +295,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resp-pkts", type=float, default=0.0)
     parser.add_argument("--resp-ip-bytes", type=float, default=0.0)
     return parser.parse_args()
+
 
 
 def main() -> None:

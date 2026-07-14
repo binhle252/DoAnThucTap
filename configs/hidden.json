@@ -1,0 +1,14 @@
+{
+    "parameter":"hidden_channels",
+
+    "values":[32,64,128],
+
+    "fixed":{
+
+        "heads":4,
+
+        "epochs":50,
+
+        "dropout":0.2
+    }
+}

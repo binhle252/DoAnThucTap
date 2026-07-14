@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pandas as pd
 import argparse
 import copy
 import json
@@ -41,26 +42,55 @@ class GATEdgeClassifier(nn.Module):
         edge_in_channels: int,
         hidden_channels: int,
         heads: int,
+        layers: int,
         dropout: float,
     ) -> None:
         super().__init__()
         self.dropout = dropout
+        self.layers = layers
+        self.last_attention = None
+        self.last_attention_edges = None
 
-        self.gat1 = GATConv(
-            in_channels=node_in_channels,
-            out_channels=hidden_channels,
-            heads=heads,
-            dropout=dropout,
-            edge_dim=edge_in_channels,
-        )
-        self.gat2 = GATConv(
-            in_channels=hidden_channels * heads,
-            out_channels=hidden_channels,
-            heads=1,
-            concat=False,
-            dropout=dropout,
-            edge_dim=edge_in_channels,
-        )
+        self.gat_layers = nn.ModuleList()
+
+        for i in range(layers):
+
+            if i == 0:
+
+                self.gat_layers.append(
+                    GATConv(
+                        in_channels=node_in_channels,
+                        out_channels=hidden_channels,
+                        heads=heads,
+                        dropout=dropout,
+                        edge_dim=edge_in_channels,
+                    )
+            )
+
+            elif i == layers - 1:
+
+                self.gat_layers.append(
+                    GATConv(
+                        in_channels=hidden_channels * heads,
+                        out_channels=hidden_channels,
+                        heads=1,
+                        concat=False,
+                        dropout=dropout,
+                        edge_dim=edge_in_channels,
+                    )
+                )
+
+            else:
+
+                self.gat_layers.append(
+                    GATConv(
+                        in_channels=hidden_channels * heads,
+                        out_channels=hidden_channels,
+                        heads=heads,
+                        dropout=dropout,
+                        edge_dim=edge_in_channels,
+                    )
+                )
         self.edge_classifier = nn.Sequential(
             nn.Linear(hidden_channels * 2 + edge_in_channels, hidden_channels * 2),
             nn.ReLU(),
@@ -84,19 +114,46 @@ class GATEdgeClassifier(nn.Module):
         if classify_edge_attr is None:
             classify_edge_attr = message_edge_attr
 
-        h = self.gat1(
-            x,
-            message_edge_index,
-            message_edge_attr,
-        )
-        h = F.elu(h)
-        h = F.dropout(h, p=self.dropout, training=self.training)
-        h = self.gat2(h, message_edge_index, message_edge_attr)
+        h = x
+
+        for i, gat in enumerate(self.gat_layers):
+
+            if i == 0:
+
+                h, (att_edge_index, att_weight) = gat(
+                    h,
+                    message_edge_index,
+                    message_edge_attr,
+                    return_attention_weights=True,
+                )
+
+                self.last_attention = att_weight.detach().cpu()
+                self.last_attention_edges = att_edge_index.detach().cpu()
+
+            else:
+
+                h = gat(
+                    h,
+                    message_edge_index,
+                    message_edge_attr,
+                )
+
+            if i != len(self.gat_layers) - 1:
+
+                h = F.elu(h)
+
+                h = F.dropout(
+                    h,
+                    p=self.dropout,
+                    training=self.training,
+                )
 
         src_nodes, dst_nodes = classify_edge_index
         edge_repr = torch.cat([h[src_nodes], h[dst_nodes], classify_edge_attr], dim=1)
         return self.edge_classifier(edge_repr)
 
+    def get_attention(self):
+        return self.last_attention_edges, self.last_attention
 
 def load_graph_data(arrays_path: Path, device: torch.device) -> Data:
     arrays = np.load(arrays_path)
@@ -244,6 +301,26 @@ def evaluate_with_threshold_tuning(
         },
     }
 
+def save_attention(model, output_path):
+    print("=== SAVE ATTENTION ===")
+    print(model.get_attention())
+    edges, attention = model.get_attention()
+
+    if edges is None or attention is None:
+        return
+
+    df = pd.DataFrame({
+        "src_node": edges[0].numpy(),
+        "dst_node": edges[1].numpy(),
+    })
+
+    # Nếu nhiều head thì lưu từng head
+    for i in range(attention.shape[1]):
+        df[f"head_{i}"] = attention[:, i].numpy()
+
+    df["attention_mean"] = attention.mean(dim=1).numpy()
+
+    df.to_csv(output_path, index=False)
 
 def flatten_metrics(metrics: dict) -> dict:
     flat = {}
@@ -293,6 +370,7 @@ def train(args: argparse.Namespace) -> dict:
         edge_in_channels=data.edge_attr.shape[1],
         hidden_channels=args.hidden_channels,
         heads=args.heads,
+        layers=args.layers,
         dropout=args.dropout,
     ).to(device)
 
@@ -398,6 +476,9 @@ def train(args: argparse.Namespace) -> dict:
 
     args.model_dir.mkdir(parents=True, exist_ok=True)
     args.results_dir.mkdir(parents=True, exist_ok=True)
+
+    save_attention(model, args.results_dir / "attention.csv")
+
     save_confusion_matrices(args.results_dir, final_metrics)
 
     checkpoint = {
@@ -407,6 +488,7 @@ def train(args: argparse.Namespace) -> dict:
             "edge_in_channels": int(data.edge_attr.shape[1]),
             "hidden_channels": int(args.hidden_channels),
             "heads": int(args.heads),
+            "layers": int(args.layers),
             "dropout": float(args.dropout),
             "message_passing_edges": message_passing_edges,
             "selection_metric": selection_metric,
@@ -455,6 +537,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--hidden-channels", type=int, default=64)
     parser.add_argument("--heads", type=int, default=4)
+    parser.add_argument(
+        "--layers",
+        type=int,
+        default=2,
+    )
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--lr", type=float, default=0.005)
     parser.add_argument("--weight-decay", type=float, default=0.0005)
