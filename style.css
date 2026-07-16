@@ -1,0 +1,41 @@
+.block-container{
+    padding-top:1rem;
+    padding-bottom:1rem;
+    max-width:1450px;
+}
+
+div[data-testid="stMetric"]{
+    background:#fff;
+    border:1px solid #E5E7EB;
+    border-radius:6px;
+    padding:10px;
+}
+
+div[data-testid="stDataFrame"]{
+    border:1px solid #E5E7EB;
+    border-radius:6px;
+}
+
+.stButton>button,
+.stDownloadButton>button{
+    border-radius:6px;
+    border:1px solid #D1D5DB;
+}
+
+.stFileUploader{
+    border:1px solid #E5E7EB;
+    border-radius:6px;
+    padding:10px;
+}
+
+h1{
+    margin-bottom:.3rem;
+}
+
+h2{
+    margin-top:.8rem;
+}
+
+hr{
+    margin:10px 0;
+}

@@ -16,7 +16,13 @@ st.set_page_config(
     layout="wide",
 )
 
-MODEL_PATH = Path("models/gat_edge_classifier.pt")
+with open("style.css") as f:
+    st.markdown(
+        f"<style>{f.read()}</style>",
+        unsafe_allow_html=True,
+    )
+
+MODEL_PATH = Path("models/gat_edge_classifier_seed_45.pt")
 PREPROCESSOR_PATH = Path("data/processed/edge_preprocessor.joblib")
 NODE_MAPPING_PATH = Path("data/processed/node_mapping.csv")
 ARRAYS_PATH = Path("data/processed/graph_arrays.npz")
@@ -46,18 +52,22 @@ def load_resources():
         node_mapping,
     )
 model, device, threshold, config, preprocessor, node_mapping = load_resources()
+metrics = load_metrics()
+st.title("🛡️ Intrusion Detection System")
 
-st.title("🛡️ Intrusion Detection System using Graph Attention Network")
+c1, c2, c3, c4 = st.columns(4)
 
-st.markdown(
-"""
-Hệ thống phát hiện hành vi độc hại trong mạng máy tính
-sử dụng Graph Attention Network (GAT)
-với tập dữ liệu IoT-23.
-"""
+c1.metric("Model", "GAT")
+c2.metric("Best Epoch", metrics["best_epoch"])
+c3.metric("Threshold", f"{threshold:.3f}")
+c4.metric("Dataset", "IoT-23")
+
+st.divider()
+
+left, right = st.columns(
+    [2.2,1],
+    gap="large",
 )
-
-left, right = st.columns([2,1])
 
 with left:
 
@@ -193,8 +203,8 @@ with left:
 
         st.dataframe(
             display_df[display_columns],
-            height=350,
-            width="stretch",
+            height=260,
+            use_container_width=True,
         )
 
         st.subheader("🔍 Select Flow")
@@ -247,7 +257,7 @@ with left:
 
         st.dataframe(
             flow_info,
-            width="stretch",
+            use_container_width=True
         )
 
         predict_clicked = st.button(
@@ -289,9 +299,8 @@ with left:
 
             st.header("🚨 Detection Result")
 
-            c1, c2 = st.columns(2)
-            c3, c4 = st.columns(2)
-            c5, c6 = st.columns(2)
+            c1,c2,c3 = st.columns(3)
+            c4,c5,c6 = st.columns(3)
 
             confidence = max(
                 result["malicious_probability"],
@@ -425,14 +434,14 @@ with left:
             
             st.divider()
 
-            st.header("📑 Prediction History")
+            st.subheader("Prediction History")
             history_df = pd.DataFrame(
                 st.session_state.history
             )
 
             st.dataframe(
                 history_df,
-                width="stretch",
+                use_container_width=True
             )
             if len(history_df):
 
@@ -478,7 +487,7 @@ with left:
 
                 st.rerun()
 
-            st.header("🧠 Explainable AI")
+            st.subheader("Graph Attention Analysis")
 
             attention_image = Path(
                 "results/graph_attention.png"
@@ -490,7 +499,7 @@ with left:
 
                 st.image(
                     attention_image,
-                    width="stretch",
+                    use_container_width=True
                 )
 
             else:
@@ -528,7 +537,7 @@ with left:
                         "attention_mean",
                     ]
                 ],
-                width="stretch",
+                use_container_width=True
             )
 
             st.subheader(
@@ -572,22 +581,26 @@ with right:
 
     if metrics:
 
-        st.metric(
+        c1, c2 = st.columns(2)
+
+        c1.metric(
             "Accuracy",
             f"{metrics['accuracy']*100:.2f}%"
         )
 
-        st.metric(
+        c2.metric(
             "Precision",
             f"{metrics['precision']*100:.2f}%"
         )
 
-        st.metric(
+        c3, c4 = st.columns(2)
+
+        c3.metric(
             "Recall",
             f"{metrics['recall']*100:.2f}%"
         )
 
-        st.metric(
+        c4.metric(
             "F1-score",
             f"{metrics['f1']*100:.2f}%"
         )
@@ -596,22 +609,26 @@ with right:
 
         st.subheader("Training")
 
-        st.metric(
+        c1, c2 = st.columns(2)
+
+        c1.metric(
             "Best Epoch",
             metrics["best_epoch"],
         )
 
-        st.metric(
+        c2.metric(
             "Threshold",
             f"{metrics['threshold']:.3f}",
         )
 
-        st.metric(
+        c3, c4 = st.columns(2)
+
+        c3.metric(
             "ROC AUC",
             f"{metrics['roc_auc']:.3f}",
         )
 
-        st.metric(
+        c4.metric(
             "PR AUC",
             f"{metrics['pr_auc']:.3f}",
         )
@@ -664,12 +681,30 @@ with right:
 
         st.subheader("⚙ Model Configuration")
 
-        st.write(f"**Heads:** {config['heads']}")
-        st.write(f"**Hidden Channels:** {config['hidden_channels']}")
-        st.write(f"**Layers:** {config.get('layers',2)}")
-        st.write(f"**Threshold:** {threshold:.3f}")
-        st.write(f"**Node Features:** {config['node_in_channels']}")
-        st.write(f"**Edge Features:** {config['edge_in_channels']}")
+        config_df = pd.DataFrame({
+            "Parameter":[
+                "Heads",
+                "Layers",
+                "Hidden",
+                "Threshold",
+                "Node Features",
+                "Edge Features",
+            ],
+            "Value":[
+                config["heads"],
+                config["layers"],
+                config["hidden_channels"],
+                f"{threshold:.3f}",
+                config["node_in_channels"],
+                config["edge_in_channels"],
+            ]
+        })
+
+        st.dataframe(
+            config_df,
+            hide_index=True,
+            use_container_width=True,
+        )
 
     else:
 
