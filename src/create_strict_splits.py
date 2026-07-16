@@ -49,7 +49,7 @@ def create_class_time_split(
     val_parts = []
     test_parts = []
 
-    for label_value, class_df in df.groupby(TARGET_COLUMN):
+    for raw_label, class_df in df.groupby("label"):
         class_df = class_df.sort_values("ts").reset_index(drop=True)
         n = len(class_df)
         train_end = int(n * 0.70)
@@ -68,7 +68,7 @@ def create_class_time_split(
             val_n = int(rows_per_class * 0.15)
             test_n = rows_per_class - train_n - val_n
 
-        offset = int(label_value) * 1000
+        offset = abs(hash(raw_label)) % 100000
         train_parts.append(sample_from_pool(train_pool, train_n, random_state + offset + 1))
         val_parts.append(sample_from_pool(val_pool, val_n, random_state + offset + 2))
         test_parts.append(sample_from_pool(test_pool, test_n, random_state + offset + 3))
@@ -110,6 +110,8 @@ def save_split_files(
     test_df.to_csv(paths["test"], index=False)
 
     return {key: str(value) for key, value in paths.items()}
+
+
 
 
 def create_strict_splits(args: argparse.Namespace) -> dict:

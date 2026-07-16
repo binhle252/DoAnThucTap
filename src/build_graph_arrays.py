@@ -53,6 +53,7 @@ TRAIN_NODE_STAT_FEATURE_NAMES = [
     "train_scaled_log1p_received_packets",
     "train_scaled_log1p_total_duration",
     "train_scaled_log1p_mean_duration",
+    "train_scaled_log1p_avg_packet_size",
 ]
 
 
@@ -192,6 +193,13 @@ def build_train_node_stat_features(
         where=total_degree > 0,
     )
 
+    avg_packet_size = np.divide(
+        sent_bytes + received_bytes,
+        sent_packets + received_packets,
+        out=np.zeros_like(sent_bytes),
+        where=(sent_packets + received_packets) > 0,
+    )
+
     stats = np.column_stack(
         [
             out_degree,
@@ -205,12 +213,16 @@ def build_train_node_stat_features(
             received_packets,
             duration_sum,
             mean_duration,
+            avg_packet_size,
         ]
     )
     log_stats = np.log1p(np.maximum(stats, 0.0))
     mean = log_stats.mean(axis=0, keepdims=True)
     std = log_stats.std(axis=0, keepdims=True)
     scaled_stats = (log_stats - mean) / np.where(std < 1e-12, 1.0, std)
+    print("Node feature dimension:", scaled_stats.shape[1])
+    print("Average Packet Size sample:")
+    print(avg_packet_size[:10])
     return scaled_stats.astype(np.float32)
 
 
@@ -263,7 +275,7 @@ def build_masks(df: pd.DataFrame) -> dict[str, np.ndarray]:
 def build_graph_arrays(
     processed_dir: Path,
     output_dir: Path,
-    node_feature_mode: str = "ip",
+    node_feature_mode: str = "ip_stats",
 ) -> dict:
     df = load_splits(processed_dir)
     train_df = df[df["split"] == "train"]
@@ -386,7 +398,7 @@ def parse_args() -> argparse.Namespace:
             "stats",
             "ip_stats",
         ],
-        default="ip",
+        default="ip_stats",
         help="Use only IP-derived node features, or add train-only node statistics for ablation.",
     )
     return parser.parse_args()

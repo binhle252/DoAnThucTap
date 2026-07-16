@@ -1,29 +1,27 @@
 {
   "strategy": "class_time",
-  "source": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\processed\\iot23_binary_sample.csv",
+  "source": "C:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\processed\\iot23_binary_sample.csv",
   "rows_per_class": 50000,
   "random_state": 42,
   "strict_split_note": "class_time keeps each class balanced while preserving temporal order inside each class",
   "splits": {
     "train": {
-      "rows": 70000,
+      "rows": 69996,
       "binary_label_counts": {
         "0": 35000,
-        "1": 35000
+        "1": 34996
       },
       "raw_label_counts": {
         "Benign": 35000,
-        "PartOfAHorizontalPortScan": 21212,
-        "Okiru": 12293,
-        "DDoS": 1321,
-        "C&C": 160,
-        "C&C-HeartBeat": 11,
-        "C&C-FileDownload": 1,
-        "C&C-Torii": 1,
-        "Attack": 1
+        "PartOfAHorizontalPortScan": 22124,
+        "Okiru": 8605,
+        "DDoS": 4144,
+        "C&C": 113,
+        "C&C-HeartBeat": 8,
+        "Attack": 2
       },
       "ts_min": 1532101091.1943789,
-      "ts_max": 1551381693.86339
+      "ts_max": 1569018229.278898
     },
     "val": {
       "rows": 15000,
@@ -33,33 +31,41 @@
       },
       "raw_label_counts": {
         "Benign": 7500,
-        "PartOfAHorizontalPortScan": 7495,
-        "Attack": 3,
-        "C&C": 2
+        "PartOfAHorizontalPortScan": 4741,
+        "Okiru": 1844,
+        "DDoS": 888,
+        "C&C": 24,
+        "C&C-HeartBeat": 2,
+        "Attack": 1
       },
-      "ts_min": 1545408170.360159,
-      "ts_max": 1552048400.8397882
+      "ts_min": 1545336841.035574,
+      "ts_max": 1569018237.219841
     },
     "test": {
-      "rows": 15000,
+      "rows": 15004,
       "binary_label_counts": {
         "0": 7500,
-        "1": 7500
+        "1": 7504
       },
       "raw_label_counts": {
         "Benign": 7500,
-        "DDoS": 4600,
-        "PartOfAHorizontalPortScan": 2899,
-        "C&C-HeartBeat": 1
+        "PartOfAHorizontalPortScan": 4741,
+        "Okiru": 1844,
+        "DDoS": 889,
+        "C&C": 25,
+        "C&C-HeartBeat": 2,
+        "C&C-Torii": 1,
+        "Attack": 1,
+        "C&C-FileDownload": 1
       },
-      "ts_min": 1547144827.497778,
+      "ts_min": 1538520771.606545,
       "ts_max": 1569018251.901591
     }
   },
   "paths": {
-    "full": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\iot23_binary_sample.csv",
-    "train": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\train.csv",
-    "val": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\val.csv",
-    "test": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\test.csv"
+    "full": "C:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\iot23_binary_sample.csv",
+    "train": "C:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\train.csv",
+    "val": "C:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\val.csv",
+    "test": "C:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\test.csv"
   }
 }

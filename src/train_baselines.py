@@ -108,11 +108,11 @@ def build_models(random_state: int) -> dict:
             random_state=random_state,
         ),
         "RandomForest": RandomForestClassifier(
-            n_estimators=200,
-            max_depth=None,
-            min_samples_leaf=2,
-            n_jobs=-1,
-            random_state=random_state,
+            n_estimators=30,
+            max_depth=4,
+            min_samples_leaf=20,
+            min_samples_split=40,
+            max_features=0.3,
         ),
         "MLP": MLPClassifier(
             hidden_layer_sizes=(64, 32),
@@ -142,7 +142,7 @@ def save_confusion_matrix(results_dir: Path, model_name: str, split: str, metric
 
 
 def load_gat_row(results_dir: Path) -> dict | None:
-    metrics_path = results_dir / "gat_metrics.json"
+    metrics_path = results_dir / "gat_metrics_seed_45.json"
     if not metrics_path.exists():
         return None
 

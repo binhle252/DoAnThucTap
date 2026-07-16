@@ -30,9 +30,15 @@ def project_root() -> Path:
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
+
     torch.manual_seed(seed)
+
     if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 class GATEdgeClassifier(nn.Module):
@@ -340,8 +346,11 @@ def generalization_gap(metrics: dict) -> dict:
         for key in ["accuracy", "precision", "recall", "f1"]
     }
 
-
-def save_confusion_matrices(results_dir: Path, metrics: dict) -> None:
+def save_confusion_matrices(
+    results_dir: Path,
+    metrics: dict,
+    seed: int,
+) -> None:
     for split, values in metrics.items():
         cm = values["confusion_matrix"]
         rows = [
@@ -351,7 +360,8 @@ def save_confusion_matrices(results_dir: Path, metrics: dict) -> None:
             f"Malicious,Benign,{cm['fn']}",
             f"Malicious,Malicious,{cm['tp']}",
         ]
-        (results_dir / f"confusion_matrix_{split}.csv").write_text(
+        (
+    results_dir /f"confusion_matrix_{split}_seed_{seed}.csv").write_text(
             "\n".join(rows) + "\n",
             encoding="utf-8",
         )
@@ -374,7 +384,7 @@ def train(args: argparse.Namespace) -> dict:
         dropout=args.dropout,
     ).to(device)
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
         weight_decay=args.weight_decay,
@@ -399,6 +409,12 @@ def train(args: argparse.Namespace) -> dict:
         )
         loss = criterion(logits[data.train_mask], data.y[data.train_mask])
         loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(
+            model.parameters(),
+            max_norm=1.0,
+        )
+
         optimizer.step()
 
         metrics = evaluate(
@@ -443,8 +459,11 @@ def train(args: argparse.Namespace) -> dict:
         else:
             epochs_without_improvement += 1
 
+        current_lr = optimizer.param_groups[0]["lr"]
+
         print(
             f"Epoch {epoch:03d} | "
+            f"lr={current_lr:.6f} | "
             f"loss={row['loss']:.4f} | "
             f"val_acc={row['val_accuracy']:.4f} | "
             f"val_f1={row['val_f1']:.4f} | "
@@ -477,10 +496,18 @@ def train(args: argparse.Namespace) -> dict:
     args.model_dir.mkdir(parents=True, exist_ok=True)
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
-    save_attention(model, args.results_dir / "attention.csv")
+    save_attention(
+    model,
+        args.results_dir /
+        f"attention_seed_{args.random_state}.csv",
+    )
 
-    save_confusion_matrices(args.results_dir, final_metrics)
-
+    save_confusion_matrices(
+        args.results_dir,
+        final_metrics,
+        args.random_state,
+    )
+    
     checkpoint = {
         "model_state_dict": model.state_dict(),
         "config": {
@@ -497,10 +524,14 @@ def train(args: argparse.Namespace) -> dict:
         "best_epoch": int(best_epoch),
         "final_metrics": final_metrics,
     }
-    model_path = args.model_dir / "gat_edge_classifier.pt"
+    model_path = (
+        args.model_dir /
+        f"gat_edge_classifier_seed_{args.random_state}.pt"
+    )
     torch.save(checkpoint, model_path)
 
     results = {
+        "seed": args.random_state,
         "device": str(device),
         "requested_epochs": int(args.epochs),
         "completed_epochs": int(len(history)),
@@ -519,7 +550,10 @@ def train(args: argparse.Namespace) -> dict:
         "generalization_gap_train_minus_test": gap,
         "model_path": str(model_path),
     }
-    metrics_path = args.results_dir / "gat_metrics.json"
+    metrics_path = (
+        args.results_dir /
+        f"gat_metrics_seed_{args.random_state}.json"
+    )
     metrics_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
     return results
 
@@ -534,8 +568,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model-dir", type=Path, default=root / "models")
     parser.add_argument("--results-dir", type=Path, default=root / "results")
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--hidden-channels", type=int, default=64)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--hidden-channels", type=int, default=128)
     parser.add_argument("--heads", type=int, default=4)
     parser.add_argument(
         "--layers",
@@ -543,17 +577,21 @@ def parse_args() -> argparse.Namespace:
         default=2,
     )
     parser.add_argument("--dropout", type=float, default=0.2)
-    parser.add_argument("--lr", type=float, default=0.005)
+    parser.add_argument("--lr", type=float, default=0.0005)
     parser.add_argument("--weight-decay", type=float, default=0.0005)
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--cpu", action="store_true")
-    parser.add_argument("--early-stopping", action="store_true")
-    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument(
+        "--early-stopping",
+        action="store_true",
+        default=True,
+    )
+    parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--min-delta", type=float, default=0.0005)
     parser.add_argument(
         "--selection-metric",
         choices=["val_f1", "val_tuned_f1", "val_pr_auc", "val_roc_auc"],
-        default="val_f1",
+        default="val_tuned_f1",
         help="Validation metric used for best-epoch selection.",
     )
     parser.add_argument(

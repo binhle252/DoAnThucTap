@@ -30,7 +30,7 @@
     "note": "Timestamp is kept for splitting/metadata but is not used as a model feature."
   },
   "node_feature_policy": {
-    "mode": "ip",
+    "mode": "ip_stats",
     "ip_features": [
       "ipv4_octet_1",
       "ipv4_octet_2",
@@ -41,12 +41,25 @@
       "is_multicast",
       "is_loopback"
     ],
-    "train_only_stat_features": [],
+    "train_only_stat_features": [
+      "train_scaled_log1p_out_degree",
+      "train_scaled_log1p_in_degree",
+      "train_scaled_log1p_total_degree",
+      "train_scaled_log1p_unique_out_peers",
+      "train_scaled_log1p_unique_in_peers",
+      "train_scaled_log1p_sent_bytes",
+      "train_scaled_log1p_received_bytes",
+      "train_scaled_log1p_sent_packets",
+      "train_scaled_log1p_received_packets",
+      "train_scaled_log1p_total_duration",
+      "train_scaled_log1p_mean_duration",
+      "train_scaled_log1p_avg_packet_size"
+    ],
     "note": "Train-only node statistics are computed only from train edges, use no labels, then log1p-scaled and standardized across nodes."
   },
   "num_nodes": 92413,
   "num_edges": 100000,
-  "node_feature_dim": 8,
+  "node_feature_dim": 20,
   "edge_feature_dim": 54,
   "node_feature_names": [
     "ipv4_octet_1",
@@ -56,7 +69,19 @@
     "is_private",
     "is_global",
     "is_multicast",
-    "is_loopback"
+    "is_loopback",
+    "train_scaled_log1p_out_degree",
+    "train_scaled_log1p_in_degree",
+    "train_scaled_log1p_total_degree",
+    "train_scaled_log1p_unique_out_peers",
+    "train_scaled_log1p_unique_in_peers",
+    "train_scaled_log1p_sent_bytes",
+    "train_scaled_log1p_received_bytes",
+    "train_scaled_log1p_sent_packets",
+    "train_scaled_log1p_received_packets",
+    "train_scaled_log1p_total_duration",
+    "train_scaled_log1p_mean_duration",
+    "train_scaled_log1p_avg_packet_size"
   ],
   "edge_feature_names": [
     "numeric__id.orig_p",
@@ -124,8 +149,8 @@
     "test": 15000
   },
   "paths": {
-    "arrays": "data\\strict_time_balanced\\graph_arrays.npz",
-    "node_mapping": "data\\strict_time_balanced\\node_mapping.csv",
-    "edge_preprocessor": "data\\strict_time_balanced\\edge_preprocessor.joblib"
+    "arrays": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\graph_arrays.npz",
+    "node_mapping": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\node_mapping.csv",
+    "edge_preprocessor": "c:\\Users\\Binh\\OneDrive\\Documents\\C\u1ea6N N\u1ed8P\\IDS_GAT_IOT23\\data\\strict_time_balanced\\edge_preprocessor.joblib"
   }
 }
