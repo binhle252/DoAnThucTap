@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 
-RESULT_PATH = Path("results/gat_metrics.json")
+RESULT_PATH = Path("results/gat_metrics_seed_45.json")
 
 
 def load_metrics():
