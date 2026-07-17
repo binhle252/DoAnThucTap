@@ -74,7 +74,7 @@ left, right = st.columns(
     gap="large",
 )
 
-@st.fragment(run_every="1s")
+@st.fragment(run_every="2s")
 def realtime_fragment(
     df,
     model,
@@ -84,51 +84,98 @@ def realtime_fragment(
     node_mapping,
     graph,
 ):
+    # -----------------------------
+    # Chạy dự đoán nếu đang Monitoring
+    # -----------------------------
+    if st.session_state.rt_running:
 
-    if not st.session_state.rt_running:
-        return
+        # Hết dữ liệu thì tự dừng
+        if st.session_state.rt_index >= len(df):
+            st.session_state.rt_running = False
 
-    if st.session_state.rt_index >= len(df):
-        st.session_state.rt_running = False
-        return
+        else:
+            flow = df.iloc[st.session_state.rt_index]
 
-    flow = df.iloc[st.session_state.rt_index]
+            result = predict_flow(
+                flow=flow.to_dict(),
+                model=model,
+                device=device,
+                threshold=threshold,
+                preprocessor=preprocessor,
+                node_mapping=node_mapping.copy(),
+                graph=graph,
+            )
 
-    result = predict_flow(
-        flow=flow.to_dict(),
-        model=model,
-        device=device,
-        threshold=threshold,
-        preprocessor=preprocessor,
-        node_mapping=node_mapping.copy(),
-        graph=graph,
+            if result["predicted_label"] == "Malicious":
+                st.session_state.attack_count += 1
+            else:
+                st.session_state.benign_count += 1
+
+            import time
+
+            st.session_state.rt_history.insert(
+                0,
+                {
+                    "Time": time.strftime("%H:%M:%S"),
+                    "Source": flow["id.orig_h"],
+                    "Destination": flow["id.resp_h"],
+                    "Protocol": flow["proto"],
+                    "Prediction": result["predicted_label"],
+                    "Probability": round(
+                        result["malicious_probability"] * 100,
+                        2,
+                    ),
+                },
+            )
+
+            st.session_state.rt_history = st.session_state.rt_history[:100]
+
+            # Tăng số flow đã xử lý
+            st.session_state.rt_index += 1
+
+    # -----------------------------
+    # Hiển thị trạng thái
+    # -----------------------------
+    status = (
+        "🟢 Running"
+        if st.session_state.rt_running
+        else "🔴 Stopped"
     )
 
-    if result["predicted_label"] == "Malicious":
-        st.session_state.attack_count += 1
-    else:
-        st.session_state.benign_count += 1
+    c1, c2, c3, c4 = st.columns(4)
 
-    import time
-
-    st.session_state.rt_history.insert(
-        0,
-        {
-            "Time": time.strftime("%H:%M:%S"),
-            "Source": flow["id.orig_h"],
-            "Destination": flow["id.resp_h"],
-            "Protocol": flow["proto"],
-            "Prediction": result["predicted_label"],
-            "Probability": round(
-                result["malicious_probability"] * 100,
-                2,
-            ),
-        },
+    c1.metric(
+        "Status",
+        status,
     )
 
-    st.session_state.rt_history = st.session_state.rt_history[:15]
+    c2.metric(
+        "Processed",
+        st.session_state.rt_index,
+    )
 
-    st.session_state.rt_index += 1
+    c3.metric(
+        "Attack",
+        st.session_state.attack_count,
+    )
+
+    c4.metric(
+        "Benign",
+        st.session_state.benign_count,
+    )
+
+    progress = (
+        st.session_state.rt_index / len(df)
+        if len(df) > 0
+        else 0
+    )
+
+    st.progress(progress)
+
+    st.caption(
+        f"Processed {st.session_state.rt_index:,} / {len(df):,} flows "
+        f"({progress*100:.1f}%)"
+    )
 
     st.dataframe(
         pd.DataFrame(st.session_state.rt_history),
@@ -209,30 +256,6 @@ with left:
             if st.button("■ Stop"):
 
                 st.session_state.rt_running = False
-
-        status = "🟢 Running" if st.session_state.rt_running else "🔴 Stopped"
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        c1.metric(
-            "Status",
-            status
-        )
-
-        c2.metric(
-            "Processed",
-            st.session_state.rt_index
-        )
-
-        c3.metric(
-            "Attack",
-            st.session_state.attack_count
-        )
-
-        c4.metric(
-            "Benign",
-            st.session_state.benign_count
-        )
 
         st.subheader("📊 Dataset Summary")
 
