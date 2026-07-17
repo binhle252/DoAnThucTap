@@ -216,14 +216,22 @@ def build_train_node_stat_features(
             avg_packet_size,
         ]
     )
-    log_stats = np.log1p(np.maximum(stats, 0.0))
-    mean = log_stats.mean(axis=0, keepdims=True)
-    std = log_stats.std(axis=0, keepdims=True)
-    scaled_stats = (log_stats - mean) / np.where(std < 1e-12, 1.0, std)
-    print("Node feature dimension:", scaled_stats.shape[1])
-    print("Average Packet Size sample:")
-    print(avg_packet_size[:10])
-    return scaled_stats.astype(np.float32)
+    raw_stats = stats.astype(np.float32)
+    log_stats = np.log1p(
+        np.maximum(stats, 0.0)
+    )
+
+    scaler = StandardScaler()
+
+    scaled_stats = scaler.fit_transform(
+        log_stats
+    )
+
+    return (
+        scaled_stats.astype(np.float32),
+        scaler,
+        raw_stats,
+    )
 
 
 def build_node_features(
@@ -234,29 +242,48 @@ def build_node_features(
 
     ip_features = build_ip_node_features(node_mapping)
 
-    train_stats = build_train_node_stat_features(
-        train_df,
-        node_mapping,
-    )
+    train_stats = None
+    node_stat_scaler = None
+
+    if node_feature_mode != "ip":
+
+        train_stats, node_stat_scaler, raw_node_stats = \
+            build_train_node_stat_features(
+                train_df,
+                node_mapping,
+            )
 
     if node_feature_mode == "ip":
-        return ip_features
+        return (
+            ip_features,
+            None,
+            None,
+        )
 
     elif node_feature_mode == "stats":
-        return train_stats
+        return (
+            train_stats,
+            node_stat_scaler,
+            raw_node_stats,
+        )
 
     elif node_feature_mode == "ip_stats":
-        return np.hstack(
-            [
-                ip_features,
-                train_stats,
-            ]
-        ).astype(np.float32)
+        return (
+            np.hstack(
+                [
+                    ip_features,
+                    train_stats,
+                ]
+            ).astype(np.float32),
+            node_stat_scaler,
+            raw_node_stats,
+        )
 
     else:
         raise ValueError(
             f"Unknown node feature mode: {node_feature_mode}"
         )
+
 
 
 def build_edge_index(df: pd.DataFrame, node_mapping: dict[str, int]) -> np.ndarray:
@@ -285,7 +312,12 @@ def build_graph_arrays(
     edge_feature_names = get_edge_feature_names(preprocessor)
 
     node_mapping = build_node_mapping(df)
-    x = build_node_features(node_mapping, train_df, node_feature_mode)
+    x, node_stat_scaler, raw_node_stats = \
+        build_node_features(
+            node_mapping,
+            train_df,
+            node_feature_mode,
+        )
     node_feature_names = IP_NODE_FEATURE_NAMES
     if node_feature_mode == "ip_stats":
         node_feature_names = IP_NODE_FEATURE_NAMES + TRAIN_NODE_STAT_FEATURE_NAMES
@@ -320,15 +352,36 @@ def build_graph_arrays(
     )
 
     node_mapping_path = output_dir / "node_mapping.csv"
-    pd.DataFrame(
-        {
-            "ip": list(node_mapping.keys()),
-            "node_id": list(node_mapping.values()),
-        }
-    ).to_csv(node_mapping_path, index=False)
 
     preprocessor_path = output_dir / "edge_preprocessor.joblib"
     joblib.dump(preprocessor, preprocessor_path)
+
+    node_stat_scaler_path = None
+    raw_node_stats_path = None
+
+    if node_stat_scaler is not None:
+
+        node_stat_scaler_path = (
+            output_dir /
+            "node_stat_scaler.joblib"
+        )
+
+        joblib.dump(
+            node_stat_scaler,
+            node_stat_scaler_path,
+        )
+
+        if raw_node_stats is not None:
+
+            raw_node_stats_path = (
+                output_dir /
+                "initial_node_stats.npy"
+            )
+
+            np.save(
+                raw_node_stats_path,
+                raw_node_stats,
+            )
 
     metadata = {
         "task": "binary_edge_classification",
@@ -369,6 +422,16 @@ def build_graph_arrays(
             "arrays": str(arrays_path),
             "node_mapping": str(node_mapping_path),
             "edge_preprocessor": str(preprocessor_path),
+            "node_stat_scaler": (
+                str(node_stat_scaler_path)
+                if node_stat_scaler_path is not None
+                else None
+            ),
+            "initial_node_stats": (
+                str(raw_node_stats_path)
+                if raw_node_stats_path is not None
+                else None
+            ),
         },
     }
 
