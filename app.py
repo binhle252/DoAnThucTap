@@ -9,6 +9,7 @@ from src.demo_predict import (
     load_node_mapping,
 )
 import joblib
+import pandas as pd
 
 st.set_page_config(
     page_title="IDS using GAT",
