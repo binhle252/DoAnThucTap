@@ -7,6 +7,7 @@ from src.demo_predict import (
     predict_flow,
     load_model,
     load_node_mapping,
+    load_graph,
 )
 import joblib
 import pandas as pd
@@ -44,6 +45,8 @@ def load_resources():
         NODE_MAPPING_PATH,
     )
 
+    graph = load_graph(ARRAYS_PATH)
+
     return (
         model,
         device,
@@ -51,8 +54,9 @@ def load_resources():
         config,
         preprocessor,
         node_mapping,
+        graph,
     )
-model, device, threshold, config, preprocessor, node_mapping = load_resources()
+model, device, threshold, config, preprocessor, node_mapping, graph = load_resources()
 metrics = load_metrics()
 st.title("🛡️ Intrusion Detection System")
 
@@ -70,6 +74,68 @@ left, right = st.columns(
     gap="large",
 )
 
+@st.fragment(run_every="1s")
+def realtime_fragment(
+    df,
+    model,
+    device,
+    threshold,
+    preprocessor,
+    node_mapping,
+    graph,
+):
+
+    if not st.session_state.rt_running:
+        return
+
+    if st.session_state.rt_index >= len(df):
+        st.session_state.rt_running = False
+        return
+
+    flow = df.iloc[st.session_state.rt_index]
+
+    result = predict_flow(
+        flow=flow.to_dict(),
+        model=model,
+        device=device,
+        threshold=threshold,
+        preprocessor=preprocessor,
+        node_mapping=node_mapping.copy(),
+        graph=graph,
+    )
+
+    if result["predicted_label"] == "Malicious":
+        st.session_state.attack_count += 1
+    else:
+        st.session_state.benign_count += 1
+
+    import time
+
+    st.session_state.rt_history.insert(
+        0,
+        {
+            "Time": time.strftime("%H:%M:%S"),
+            "Source": flow["id.orig_h"],
+            "Destination": flow["id.resp_h"],
+            "Protocol": flow["proto"],
+            "Prediction": result["predicted_label"],
+            "Probability": round(
+                result["malicious_probability"] * 100,
+                2,
+            ),
+        },
+    )
+
+    st.session_state.rt_history = st.session_state.rt_history[:15]
+
+    st.session_state.rt_index += 1
+
+    st.dataframe(
+        pd.DataFrame(st.session_state.rt_history),
+        width="stretch",
+        height=320,
+    )
+
 with left:
 
     st.header("📂 Upload Traffic")
@@ -79,13 +145,94 @@ with left:
         type=["csv"],
     )
 
+    # Nếu vừa upload thì lưu vào session
     if uploaded_file is not None:
+
+        # Chỉ xử lý khi upload file mới
+        if (
+            "uploaded_filename" not in st.session_state
+            or st.session_state.uploaded_filename != uploaded_file.name
+        ):
+
+            st.session_state.df = pd.read_csv(uploaded_file)
+            st.session_state.uploaded_filename = uploaded_file.name
+
+            st.session_state.rt_running = False
+            st.session_state.rt_index = 0
+            st.session_state.rt_history = []
+            st.session_state.attack_count = 0
+            st.session_state.benign_count = 0
+
+    # Nếu đã từng upload thì lấy lại
+    if "df" in st.session_state:
+        df = st.session_state.df
+
+    if "df" in st.session_state:
 
         import pandas as pd
 
-        df = pd.read_csv(uploaded_file)
+        st.session_state.uploaded_df = df
+
+        # ---------- Realtime Session ----------
+
+        if "rt_running" not in st.session_state:
+            st.session_state.rt_running = False
+
+        if "rt_index" not in st.session_state:
+            st.session_state.rt_index = 0
+
+        if "rt_history" not in st.session_state:
+            st.session_state.rt_history = []
+
+        if "attack_count" not in st.session_state:
+            st.session_state.attack_count = 0
+
+        if "benign_count" not in st.session_state:
+            st.session_state.benign_count = 0
 
         st.success("CSV uploaded.")
+
+        st.divider()
+
+        st.subheader("🟢 Realtime Detection Monitor")
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            if st.button("▶ Start Monitoring"):
+
+                st.session_state.rt_running = True
+
+        with c2:
+
+            if st.button("■ Stop"):
+
+                st.session_state.rt_running = False
+
+        status = "🟢 Running" if st.session_state.rt_running else "🔴 Stopped"
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Status",
+            status
+        )
+
+        c2.metric(
+            "Processed",
+            st.session_state.rt_index
+        )
+
+        c3.metric(
+            "Attack",
+            st.session_state.attack_count
+        )
+
+        c4.metric(
+            "Benign",
+            st.session_state.benign_count
+        )
 
         st.subheader("📊 Dataset Summary")
 
@@ -104,6 +251,18 @@ with left:
         col3.metric(
             "Memory Usage",
             f"{df.memory_usage(deep=True).sum()/1024/1024:.2f} MB",
+        )
+
+        st.markdown("### 📜 Realtime Detection Log")
+
+        realtime_fragment(
+            df,
+            model,
+            device,
+            threshold,
+            preprocessor,
+            node_mapping,
+            graph,
         )
 
         st.subheader("📈 Traffic Statistics")
@@ -205,7 +364,7 @@ with left:
         st.dataframe(
             display_df[display_columns],
             height=260,
-            use_container_width=True,
+            width="stretch",
         )
 
         st.subheader("🔍 Select Flow")
@@ -258,7 +417,7 @@ with left:
 
         st.dataframe(
             flow_info,
-            use_container_width=True
+            width="stretch"
         )
 
         predict_clicked = st.button(
@@ -280,7 +439,7 @@ with left:
                 threshold=threshold,
                 preprocessor=preprocessor,
                 node_mapping=node_mapping.copy(),
-                arrays_path=ARRAYS_PATH,
+                graph=graph,
             )
 
             st.session_state.history.append(
@@ -442,7 +601,7 @@ with left:
 
             st.dataframe(
                 history_df,
-                use_container_width=True
+                width="stretch"
             )
             if len(history_df):
 
@@ -500,7 +659,7 @@ with left:
 
                 st.image(
                     attention_image,
-                    use_container_width=True
+                    width="stretch"
                 )
 
             else:
@@ -538,7 +697,7 @@ with left:
                         "attention_mean",
                     ]
                 ],
-                use_container_width=True
+                width="stretch"
             )
 
             st.subheader(
@@ -704,7 +863,7 @@ with right:
         st.dataframe(
             config_df,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
     else:

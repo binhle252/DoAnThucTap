@@ -48,17 +48,15 @@ def load_node_mapping(path: Path) -> dict[str, int]:
     mapping_df = pd.read_csv(path)
     return dict(zip(mapping_df["ip"].astype(str), mapping_df["node_id"].astype(int)))
 
-
 def append_new_flow_to_graph(
-    arrays_path: Path,
+    graph,
     node_mapping: dict[str, int],
     flow_df: pd.DataFrame,
     edge_attr: np.ndarray,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    arrays = np.load(arrays_path)
-    x = arrays["x"].astype(np.float32)
-    edge_index = arrays["edge_index"].astype(np.int64)
-    old_edge_attr = arrays["edge_attr"].astype(np.float32)
+):
+    x = graph["x"].copy()
+    edge_index = graph["edge_index"].copy()
+    old_edge_attr = graph["edge_attr"].copy()
 
     src_ip = str(flow_df.iloc[0][IP_COLUMNS[0]])
     dst_ip = str(flow_df.iloc[0][IP_COLUMNS[1]])
@@ -128,48 +126,56 @@ def load_model(model_path: Path, cpu: bool = False):
     )
 
 def predict_flow(
-        flow: dict,
+        flow,
         model,
         device,
         threshold,
         preprocessor,
         node_mapping,
-        arrays_path: Path,
+        graph,
     ) -> dict:    
 
-    print("=" * 50)
-    print(flow["id.orig_h"])
-    print(flow["id.resp_h"])
-    print(flow["orig_bytes"])
-    print(flow["resp_bytes"])
+    import time
+
+    t0 = time.perf_counter()
 
     flow_df = clean_flow(flow)
 
+    print("clean:", time.perf_counter() - t0)
+
+    t1 = time.perf_counter()
+
     new_edge_attr = preprocessor.transform(flow_df)
 
+    print("preprocess:", time.perf_counter() - t1)
+
+    t2 = time.perf_counter()
+
     x, edge_index, edge_attr = append_new_flow_to_graph(
-        arrays_path=arrays_path,
+        graph=graph,
         node_mapping=node_mapping,
         flow_df=flow_df,
         edge_attr=new_edge_attr,
     )
 
-    print(edge_index[:, -1])
-
-    print(edge_attr[-1][:10])
-
     x = x.to(device)
     edge_index = edge_index.to(device)
     edge_attr = edge_attr.to(device)
 
+    print("append:", time.perf_counter() - t2)
+
+    t3 = time.perf_counter()
+
     with torch.no_grad():
         logits = model(x, edge_index, edge_attr)
-        print(logits[-1])
         probs = torch.softmax(logits[-1], dim=0).detach().cpu().numpy()
 
     malicious_probability = float(probs[1])
     benign_probability = float(probs[0])
     predicted_class = int(malicious_probability >= threshold)
+
+    print("model:", time.perf_counter() - t3)
+    print(device)
 
     return {
         "predicted_class": predicted_class,
@@ -263,6 +269,16 @@ def predict_dataframe(
     print("5. Finish")
 
     return output
+
+def load_graph(arrays_path):
+
+    arrays = np.load(arrays_path)
+
+    return {
+        "x": arrays["x"].astype(np.float32),
+        "edge_index": arrays["edge_index"].astype(np.int64),
+        "edge_attr": arrays["edge_attr"].astype(np.float32),
+    }
 
 def parse_args() -> argparse.Namespace:
     root = project_root()

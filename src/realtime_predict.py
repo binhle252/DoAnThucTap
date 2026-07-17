@@ -162,6 +162,9 @@ class NodeStatisticsManager:
             ]
         )
 
+        self.out_neighbors.append(set())
+        self.in_neighbors.append(set())
+
     def _update_derived_features(
         self,
         node_id,
